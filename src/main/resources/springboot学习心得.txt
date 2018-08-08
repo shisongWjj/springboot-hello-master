@@ -1,0 +1,553 @@
+1.springboot入门
+    springboot开发的目的：简化新Spring应用的搭建及开发
+    为何要简化项目的搭建，源于时代的背景，微服务的崛起
+    微服务：是一种架构概念，旨在通过将功能分解到各个离散的服务中以实现对解决方案的解耦。你可以将其看作是在架构层次而非在具体代码上应用SOLID原则的设计原则。个人我认为微服务更多的是一种架构风格，也可以看作是一种粒度更细的SOA
+
+    相比较之前项目的搭建，需要一顿的配置文件的支持，才能让项目跑起来，而现在只需要简单的一个类就能让项目跑起来
+    e.g.
+    @SpringBootApplication
+    public class SpringbootHelloApplication {
+
+    	public static void main(String[] args) {
+    		SpringApplication.run(SpringbootHelloApplication.class, args);
+    	}
+    }
+    1.在包的统一路径下（com.zhihuishu.springboot.springboothello），创建一个类 比如本项目SpringbootHelloApplication
+    2.加一个类级别的注解，@SpringBootApplication
+    3.写一个main方法，方法体为SpringApplication.run(含有@SpringBootApplication注解类的类名.class, 方法的参数); 比如本项目SpringApplication.run(SpringbootHelloApplication.class, args);
+    实测：
+    项目都能启动 2和3 可以分开写在不同的类中，但是2一定要写在1创建的类中， 不然会无法扫描到 访问页面报404
+
+    为何会这样？
+    SpringApplication.run(SpringbootHelloApplication.class, args);spring应用启动  这个只是启动项目
+    但是启动的过程中的一些配置的读取和校验 都是以@SpringBootApplication这个注解为向导的
+
+    @SpringBootApplication是怎么做到以上功能的？
+    @SpringBootApplication： （springboot应用） 标注在某个类上说明该类是springboot的主配置类，springboot就应该运行这个类的main方法来启动springboot应用
+        @SpringBootConfiguration （springboot配置） 标注在某个类上，表示这是一个springboot的配置类；
+            @Configuration（配置）配置文件；配置类也是容器中的一个组件：@Component
+
+        @EnableAutoConfiguration （开启自动配置）以前我们需要配置东西，springboot帮我们全部配置了，这个注解就是这个功能
+            @Import(AutoConfigurationImportSelector.class) 导入AutoConfigurationImportSelector类
+                AutoConfigurationImportSelector（自动配置导入选择器） 选择哪些需要自动导入的
+                以下方法的目的，获取所有当前需要用到的自动配置类
+                public String[] selectImports(AnnotationMetadata annotationMetadata) {
+                    if (!isEnabled(annotationMetadata)) {
+                        return NO_IMPORTS;
+                    }
+                    AutoConfigurationMetadata autoConfigurationMetadata = AutoConfigurationMetadataLoader
+                            .loadMetadata(this.beanClassLoader);
+                    AnnotationAttributes attributes = getAttributes(annotationMetadata);
+                    List<String> configurations = getCandidateConfigurations(annotationMetadata,
+                            attributes);
+                    configurations = removeDuplicates(configurations);
+                    Set<String> exclusions = getExclusions(annotationMetadata, attributes);
+                    checkExcludedClasses(configurations, exclusions);
+                    configurations.removeAll(exclusions);
+                    configurations = filter(configurations, autoConfigurationMetadata);
+                    fireAutoConfigurationImportEvents(configurations, exclusions);
+                    return StringUtils.toStringArray(configurations);
+                }
+
+                获取META-INF/spring.factories文件的所有信息（XXXAutoConfiguration）
+                spring-boot-autoconfigure-2.0.1.RELEASE.jar!/META-INF/spring.factories
+                protected List<String> getCandidateConfigurations(AnnotationMetadata metadata,
+                			AnnotationAttributes attributes) {
+                    List<String> configurations = SpringFactoriesLoader.loadFactoryNames(
+                            getSpringFactoriesLoaderFactoryClass(), getBeanClassLoader());
+                    Assert.notEmpty(configurations,
+                            "No auto configuration classes found in META-INF/spring.factories. If you "
+                                    + "are using a custom packaging, make sure that file is correct.");
+                    return configurations;
+                }
+
+                public static List<String> loadFactoryNames(Class<?> factoryClass, @Nullable ClassLoader classLoader) {
+                    String factoryClassName = factoryClass.getName();
+                    return loadSpringFactories(classLoader).getOrDefault(factoryClassName, Collections.emptyList());
+                }
+
+                private static Map<String, List<String>> loadSpringFactories(@Nullable ClassLoader classLoader) {
+                    MultiValueMap<String, String> result = cache.get(classLoader);
+                    if (result != null) {
+                        return result;
+                    }
+
+                    try {
+                        Enumeration<URL> urls = (classLoader != null ?
+                                classLoader.getResources(FACTORIES_RESOURCE_LOCATION) :
+                                ClassLoader.getSystemResources(FACTORIES_RESOURCE_LOCATION));
+                        result = new LinkedMultiValueMap<>();
+                        while (urls.hasMoreElements()) {
+                            URL url = urls.nextElement();
+                            UrlResource resource = new UrlResource(url);
+                            Properties properties = PropertiesLoaderUtils.loadProperties(resource);
+                            for (Map.Entry<?, ?> entry : properties.entrySet()) {
+                                List<String> factoryClassNames = Arrays.asList(
+                                        StringUtils.commaDelimitedListToStringArray((String) entry.getValue()));
+                                result.addAll((String) entry.getKey(), factoryClassNames);
+                            }
+                        }
+                        cache.put(classLoader, result);
+                        return result;
+                    }
+                    catch (IOException ex) {
+                        throw new IllegalArgumentException("Unable to load factories from location [" +
+                                FACTORIES_RESOURCE_LOCATION + "]", ex);
+                    }
+                }
+
+            @AutoConfigurationPackage 自动配置包
+            @Import(AutoConfigurationPackages.Registrar.class) 将主配置所在的包以及下面所有的子包里面的所有组件扫描到spring容器中
+            org.springframework.boot.autoconfigure.AutoConfigurationPackages.Registrar
+                public void registerBeanDefinitions(AnnotationMetadata metadata,
+            				BeanDefinitionRegistry registry) {
+                    register(registry, new PackageImport(metadata).getPackageName());
+                }
+                其中new PackageImport(metadata).getPackageName()其实就是com.zhihuishu.springboot.springboothello
+
+2.配置
+    springBoot的配置文件的名字是固定的
+    1 application.properties
+    2 application.yaml(yml)
+    properties的优先级高于yaml
+
+    yaml：是一个标记语言
+    yaml:不是一个标记语言
+    标记语言：是以数据为中心的一种配置。
+
+    yaml语法
+    k:(空格)v：表示一对键值对（空格必须有）；
+    以空格的缩进来控制层级关系；只要是左对齐的一列数据，都是同一个层级的
+    1.字面量
+        userName=zhangsan
+        age=18
+        isMan=true
+        "":双引号；不会转义字符串里面的特殊字符；name="zhangsan \n lisi" 输出 zhangsan 换行 lisi
+        ''：单引号；会转义特殊字符; name='zhangsan \n lisi' 输出 zhangsan \n lisi
+    2.对象或map
+        k:v : 在下一行来写对象的属性和值的关系：
+        friends:
+            lastName: zhangsan
+            age: 20
+        行内写法：
+        friends: {lastName: zhangsan,age: 20}
+    3.集合
+    用-值表示数组中的一个元素
+    pets:
+     - cat
+     - dog
+     - pig
+     行内写法：
+     pets: [cat,dog,pig]
+
+     示例：
+     java类
+     /**
+      * 将配置文件中的每一项 映射到组件中
+      * @ConfigurationProperties：告诉springboot将奔雷中的所有属性和配置文件中相关的配置进行绑定；
+      * prefix = "person"： 配置文件下哪个下面的所有属性进行--映射
+      */
+     @Component//将person注册到容器中
+     @ConfigurationProperties(prefix = "person")
+     public class Person {
+
+         private String name;
+         private Integer age;
+         private Boolean isMan;
+         private Map<String,Object> maps;
+         private List<Object> list;
+         private Friend friend;
+
+     配置类
+     person:
+       name: 张三
+       age: 18
+       man: true
+       maps:
+         k1: v1
+         k2: v2
+       list:
+         - pig
+         - dog
+       friend:
+         name: lisi
+
+     我们除了是使用@ConfigurationProperties  也可以使用@Value来进行绑定
+     @ConfigurationProperties ：有点类似一键绑定，只要能找到的 都能映射
+     @Value ：只能一个个绑定
+     既然从开发效率上来讲@ConfigurationProperties 优于 @Value 那为什么还需要@Value
+
+                        @ConfigurationProperties        @Value
+     功能               批量注入配置文件中的属性      一个个指定
+     松散绑定               支持                         不支持
+     SpEl                  不支持                          支持
+     JER303数据校验         支持                          不支持
+     复杂类型封装           支持                          不支持
+
+    @Value 相当于 在spring.xml配置了：
+        <bean id="person" class="com.zhihuishu.springboot.springboothello.test.bean.Person">
+            <property name="age" value="19"/>
+        </bean>
+
+    @PropertySource:导入指定的配置文件
+    @Component//将person注册到容器中
+    @ConfigurationProperties(prefix = "person")
+    //@Validated
+    @PropertySource("classpath:person.properties")
+    public class Person {
+
+    @ImportResource:导入指定的spring配置文件，让spring配置文件的内容生效
+    在springboot中配置spring的配置文件，默认是不生效的
+    比如beans.xml这个文件 springboot是不会读取的，如果要让springboot读取，则需要在主配置类上加上@ImportResource
+    @ImportResource(locations = {"classpath:beans.xml"})
+    //@ImportResource("classpath:beans.xml")
+    @SpringBootApplication
+    public class SpringbootHelloApplication {
+
+    springboot不推荐使用spring的配置文件，所有配置都用注解开发
+    1.@Configuration spring配置文件
+    2.@Bean 给容器中添加组件
+    @Configuration
+    public class MyAppConf {
+
+        @Bean
+        //@Profile("dev")
+        public HelloSevice helloSevice(){
+            return new HelloSevice();
+        }
+    }
+
+    profile:配置多个环境
+    使叫pro的环境生效
+    spring:
+      profiles:
+        active: pro
+
+    dev环境
+    ---
+    server:
+      port: 8081
+    spring:
+      profiles: dev
+
+
+    pro环境
+    ---
+
+    server:
+      port: 8083
+    spring:
+      profiles: pro
+
+    使用指定环境启动jar包
+    java -jar jar包 --spring.frofiles.active=pro;
+
+    自动配置原理
+    当启动springboot项目的时候，加载主配置类
+    1.开启了自动配置功能 @EnableAutoConfiguration
+    2.EnableAutoConfiguration配置的作用
+        利用org.springframework.boot.autoconfigure.AutoConfigurationImportSelector给容器导入一些组件
+        查看org.springframework.boot.autoconfigure.AutoConfigurationImportSelector.selectImports方法
+        List<String> configurations = getCandidateConfigurations(annotationMetadata,attributes);获取候选的配置
+        List<String> configurations = SpringFactoriesLoader.loadFactoryNames(getSpringFactoriesLoaderFactoryClass(), getBeanClassLoader());
+            其中getSpringFactoriesLoaderFactoryClass()==》EnableAutoConfiguration.class
+        loadSpringFactories(classLoader).getOrDefault(factoryClassName, Collections.emptyList()); 获取类路径下META-INF/spring.factories中的KEY是EnableAutoConfiguration的所有value。
+        每一个这样的XXXAutoConfiguration类都是容器中的一个组件，都加入到容器中，用来自动配置
+
+    以其中一个为例：
+    org.springframework.boot.autoconfigure.web.servlet.HttpEncodingAutoConfiguration
+
+    @Configuration//表示这是一个配置类
+    @EnableConfigurationProperties(HttpEncodingProperties.class)//开启制定类的ConfigurationProperties；
+    //将配置文件中对应的值与HttpEncodingProperties中的属性一一对应；并把HttpEncodingProperties加入到ioc容器中
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)//Spring底层@Conditional注解（Spring注解版），根据不同的条件，如果
+    //满足指定的条件，整个配置类里面的配置就会生效； 判断当前应用是否是web应用，如果是，当前配置类生效
+    @ConditionalOnClass(CharacterEncodingFilter.class)//判断当前项目中是否存在CharacterEncodingFilter这个类，如果有，当前配置类生效
+    @ConditionalOnProperty(prefix = "spring.http.encoding", value = "enabled", matchIfMissing = true)//判断配置文件中是否存在某个配置 spring.http.encoding.enabled；如果不存在，判断也是成立的
+    //即使我们配置文件中不配置pring.http.encoding.enabled=true，也是默认生效的；
+    public class HttpEncodingAutoConfiguration {
+
+        //他已经和SpringBoot的配置文件映射了
+        private final HttpEncodingProperties properties;
+        //只有一个有参构造器的情况下，参数的值就会从容器中拿
+        public HttpEncodingAutoConfiguration(HttpEncodingProperties properties) {
+            this.properties = properties;
+        }
+
+        @Bean//给容器中添加一个组件，这个组件的某些值需要从properties中获取
+        @ConditionalOnMissingBean//判断容器没有这个组件？
+        public CharacterEncodingFilter characterEncodingFilter() {
+            CharacterEncodingFilter filter = new OrderedCharacterEncodingFilter();
+            filter.setEncoding(this.properties.getCharset().name());
+            filter.setForceRequestEncoding(this.properties.shouldForce(Type.REQUEST));
+            filter.setForceResponseEncoding(this.properties.shouldForce(Type.RESPONSE));
+            return filter;
+        }
+
+    }
+
+    @ConfigurationProperties(prefix = "spring.http.encoding")//从配置文件中获取指定的值和bean的属性进行绑定
+    public class HttpEncodingProperties {
+
+    @Conditional扩展注解 作用（判断是否满足当前指定条件）
+        @ConditionalOnJava 系统的java版本是否符合要求
+        @ConditionalOnBean 容器中存在指定Bean；
+        @ConditionalOnMissingBean 容器中不存在指定Bean；
+        @ConditionalOnExpression 满足SpEL表达式指定
+        @ConditionalOnClass 系统中有指定的类
+        @ConditionalOnMissingClass 系统中没有指定的类
+        @ConditionalOnSingleCandidate 容器中只有一个指定的Bean，或者这个Bean是首选Bean
+        @ConditionalOnProperty 系统中指定的属性是否有指定的值
+        @ConditionalOnResource 类路径下是否存在指定资源文件
+        @ConditionalOnWebApplication 当前是web环境
+        @ConditionalOnNotWebApplication 当前不是web环境
+        @ConditionalOnJndi JNDI存在指定项
+    xxxxProperties:封装配置文件中相关属性；
+    2、细节
+    1、@Conditional派生注解（Spring注解版原生的@Conditional作用）
+    作用：必须是@Conditional指定的条件成立，才给容器中添加组件，配置配里面的所有内容才生效；
+    自动配置类必须在一定的条件下才能生效；
+    我们怎么知道哪些自动配置类生效；
+    我们可以通过启用 debug=true属性；来让控制台打印自动配置报告，这样我们就可以很方便的知道哪些自动配置
+    类生效；
+
+3.web
+
+    配置错误页面
+    org.springframework.boot.autoconfigure.web.servlet.error.ErrorMvcAutoConfiguration
+    顺序：ErrorPageCustomizer   BasicErrorController  DefaultErrorAttributes DefaultErrorViewResolver
+
+    ======
+    DefaultErrorAttributes:默认的错误属性，共享信息
+    public Map<String, Object> getErrorAttributes(WebRequest webRequest,
+    			boolean includeStackTrace) {
+        Map<String, Object> errorAttributes = new LinkedHashMap<>();
+        errorAttributes.put("timestamp", new Date());
+        addStatus(errorAttributes, webRequest);
+        addErrorDetails(errorAttributes, webRequest, includeStackTrace);
+        addPath(errorAttributes, webRequest);
+        return errorAttributes;
+    }
+
+    BasicErrorController :处理默认/error请求
+    ======
+    @RequestMapping(produces = "text/html")
+    public ModelAndView errorHtml(HttpServletRequest request,
+            HttpServletResponse response) {
+        HttpStatus status = getStatus(request);
+        Map<String, Object> model = Collections.unmodifiableMap(getErrorAttributes(
+                request, isIncludeStackTrace(request, MediaType.TEXT_HTML)));
+        response.setStatus(status.value());
+        ModelAndView modelAndView = resolveErrorView(request, response, status, model);
+        return (modelAndView == null ? new ModelAndView("error", model) : modelAndView);
+    }
+
+    @RequestMapping
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> error(HttpServletRequest request) {
+        Map<String, Object> body = getErrorAttributes(request,
+                isIncludeStackTrace(request, MediaType.ALL));
+        HttpStatus status = getStatus(request);
+        return new ResponseEntity<>(body, status);
+    }
+
+    protected ModelAndView resolveErrorView(HttpServletRequest request,
+            HttpServletResponse response, HttpStatus status, Map<String, Object> model) {
+        for (ErrorViewResolver resolver : this.errorViewResolvers) {
+            ModelAndView modelAndView = resolver.resolveErrorView(request, status, model);
+            if (modelAndView != null) {
+                return modelAndView;
+            }
+        }
+        return null;
+    }
+
+
+    ErrorPageCustomizer  当项目启动的时候 加载
+    ======
+    private final ServerProperties serverProperties;
+
+    @Bean
+    public ErrorPageCustomizer errorPageCustomizer() {
+        return new ErrorPageCustomizer(this.serverProperties);
+    }
+
+    private static class ErrorPageCustomizer implements ErrorPageRegistrar, Ordered {
+
+        private final ServerProperties properties;
+
+        protected ErrorPageCustomizer(ServerProperties properties) {
+            this.properties = properties;
+        }
+
+        @Override
+        public void registerErrorPages(ErrorPageRegistry errorPageRegistry) {
+            //this.properties.getServlet().getServletPrefix()  ==>""
+            //this.properties.getError().getPath() ==> @Value("${error.path:/error}")private String path = "/error";
+            //this.status = null;this.exception = null;this.path = path;==>path=@Value("${error.path:/error}")private String path = "/error";
+            ErrorPage errorPage = new ErrorPage(
+                    this.properties.getServlet().getServletPrefix()
+                            + this.properties.getError().getPath());
+            //将新创建的errorpage对象  添加到errorPageRegistry中
+            errorPageRegistry.addErrorPages(errorPage);
+        }
+
+        @Override
+        public int getOrder() {
+            return 0;
+        }
+
+    }
+    public String getServletPrefix() {
+        String result = this.path;// "/"
+        int index = result.indexOf('*');// -1
+        if (index != -1) {
+            result = result.substring(0, index);
+        }
+        if (result.endsWith("/")) {
+            result = result.substring(0, result.length() - 1);// ""
+        }
+        return result;
+    }
+
+    DefaultErrorViewResolver : 默认的错误试图解析
+    =======
+    @Bean
+    @ConditionalOnBean(DispatcherServlet.class)
+    @ConditionalOnMissingBean
+    public DefaultErrorViewResolver conventionErrorViewResolver() {
+        return new DefaultErrorViewResolver(this.applicationContext,
+                this.resourceProperties);
+    }
+
+    private static final Map<Series, String> SERIES_VIEWS;
+
+    static {
+        Map<Series, String> views = new EnumMap<>(Series.class);
+        views.put(Series.CLIENT_ERROR, "4xx");
+        views.put(Series.SERVER_ERROR, "5xx");
+        SERIES_VIEWS = Collections.unmodifiableMap(views);
+    }
+
+    @Override
+	public ModelAndView resolveErrorView(HttpServletRequest request, HttpStatus status,
+			Map<String, Object> model) {
+		//String.valueOf(status) 错误的状态码
+		//model ==> Map<String, Object> model = Collections.unmodifiableMap(getErrorAttributes(request, isIncludeStackTrace(request, MediaType.TEXT_HTML)));
+		ModelAndView modelAndView = resolve(String.valueOf(status), model);
+		if (modelAndView == null && SERIES_VIEWS.containsKey(status.series())) {
+			modelAndView = resolve(SERIES_VIEWS.get(status.series()), model);
+		}
+		return modelAndView;
+	}
+
+	private ModelAndView resolve(String viewName, Map<String, Object> model) {
+	    //默认SpringBoot可以去找到一个页面？ error/404
+		String errorViewName = "error/" + viewName;
+
+		//模板引擎可以解析这个页面地址就用模板引擎解析
+		TemplateAvailabilityProvider provider = this.templateAvailabilityProviders
+				.getProvider(errorViewName, this.applicationContext);
+		if (provider != null) {
+		//模板引擎可用的情况下返回到errorViewName指定的视图地址
+			return new ModelAndView(errorViewName, model);
+		}
+		//模板引擎不可用，就在静态资源文件夹下找errorViewName对应的页面 error/404.html
+		return resolveResource(errorViewName, model);
+	}
+
+	private ModelAndView resolveResource(String viewName, Map<String, Object> model) {
+		for (String location : this.resourceProperties.getStaticLocations()) {
+			try {
+				Resource resource = this.applicationContext.getResource(location);
+				resource = resource.createRelative(viewName + ".html");
+				if (resource.exists()) {
+					return new ModelAndView(new HtmlResourceView(resource), model);
+				}
+			}
+			catch (Exception ex) {
+			}
+		}
+		return null;
+	}
+
+
+
+    步骤：
+    一但系统出现4xx或者5xx之类的错误；ErrorPageCustomizer就会生效（定制错误的响应规则）；就会来到/error
+    请求；就会被BasicErrorController处理；
+        1）响应页面；去哪个页面是由DefaultErrorViewResolver解析得到的；
+        for (ErrorViewResolver resolver : this.errorViewResolvers) {
+            ModelAndView modelAndView = resolver.resolveErrorView(request, status, model);
+            if (modelAndView != null) {
+                return modelAndView;
+            }
+        }
+        return null;
+
+        2）、如果定制错误响应：
+        1）、如何定制错误的页面；
+            1）、有模板引擎的情况下；error/状态码; 【将错误页面命名为 错误状态码.html 放在模板引擎文件夹里面的
+            error文件夹下】，发生此状态码的错误就会来到 对应的页面；
+            我们可以使用4xx和5xx作为错误页面的文件名来匹配这种类型的所有错误，精确优先（优先寻找精确的状态
+            码.html）；
+            页面能获取的信息；
+            timestamp：时间戳
+            status：状态码
+            error：错误提示
+            exception：异常对象
+            message：异常消息
+            errors：JSR303数据校验的错误都在这里
+            2）、没有模板引擎（模板引擎找不到这个错误页面），静态资源文件夹下找；
+            3）、以上都没有错误页面，就是默认来到SpringBoot默认的错误提示页面；
+
+        2）、如何定制错误的json数据；
+            1）、自定义异常处理&返回定制json数据；
+            @ControllerAdvice
+            public class MyExceptionHandler {
+                @ResponseBody
+                @ExceptionHandler(UserNotExistException.class)
+                public Map<String,Object> handleException(Exception e){
+                    Map<String,Object> map = new HashMap<>();
+                    map.put("code","user.notexist");
+                    map.put("message",e.getMessage());
+                    return map;
+                }
+            }
+            //没有自适应效果...
+
+        2）、转发到/error进行自适应响应效果处理
+        @ExceptionHandler(UserNotExistException.class)
+        public String handleException(Exception e, HttpServletRequest request){
+            Map<String,Object> map = new HashMap<>();
+            //传入我们自己的错误状态码 4xx 5xx，否则就不会进入定制错误页面的解析流程
+            /**
+            * Integer statusCode = (Integer) request
+            .getAttribute("javax.servlet.error.status_code");
+            */
+            request.setAttribute("javax.servlet.error.status_code",500);
+            map.put("code","user.notexist");
+            map.put("message",e.getMessage());
+            //转发到/error
+            return "forward:/error";
+        }
+
+        3）、将我们的定制数据携带出去；
+        出现错误以后，会来到/error请求，会被BasicErrorController处理，响应出去可以获取的数据是由
+        getErrorAttributes得到的（是AbstractErrorController（ErrorController）规定的方法）；
+        1、完全来编写一个ErrorController的实现类【或者是编写AbstractErrorController的子类】，放在容器中；
+        2、页面上能用的数据，或者是json返回能用的数据都是通过errorAttributes.getErrorAttributes得到；
+        容器中DefaultErrorAttributes.getErrorAttributes()；默认进行数据处理的；
+        自定义ErrorAttributes
+        //给容器中加入我们自己定义的ErrorAttributes
+        @Component
+        public class MyErrorAttributes extends DefaultErrorAttributes {
+            @Override
+            public Map<String, Object> getErrorAttributes(RequestAttributes requestAttributes,
+                boolean includeStackTrace) {
+                Map<String, Object> map = super.getErrorAttributes(requestAttributes,includeStackTrace);
+                map.put("company","atguigu");
+                return map;
+            }
+        }
+       最终的效果：响应是自适应的，可以通过定制ErrorAttributes改变需要返回的内容
